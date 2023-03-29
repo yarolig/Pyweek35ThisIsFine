@@ -32,9 +32,13 @@ class GameWindow(pyglet.window.Window):
         self.main = Main()
         self.level = Level()
 
-        self.level.cell(3,3).front_entity = SnakeHead()
-        self.level.cell(3,4).front_entity = SnakeBody()
-        self.level.cell(4,4).front_entity = SnakeTail()
+        self.level.cell(3, 3).front_entity = SnakeHead()
+        self.level.cell(3, 3).front_entity.connection = 'W'
+
+        self.level.cell(3, 4).front_entity = SnakeBody()
+        self.level.cell(3, 4).front_entity.connection = 'W'
+
+        self.level.cell(3, 5).front_entity = SnakeTail()
 
         self.level.cell(6,7).front_entity = Apple()
 
@@ -43,8 +47,7 @@ class GameWindow(pyglet.window.Window):
         self.on_maybe_start()
         self.ticks += 1
 
-
-
+        self.main.micro_tick(self.level, self.keys)
         if self.ticks % 20 == 0:
             self.main.macro_tick(self.level, self.keys)
 
@@ -74,6 +77,14 @@ DIRECTIONS_XY = {
     "A" : (-1, 0),
     "D" : (1, 0),
 }
+DIRECTIONS_XY_R = {
+    (0, 1) : "W",
+    (0, -1) : "S",
+    (-1, 0) : "A",
+    (1, 0) : "D",
+}
+
+
 
 
 class Entity:
@@ -156,6 +167,66 @@ class Main:
                 s.draw()
         self.foreground_batch.draw()
 
+    def move_bodypart(self, sc, tc, level):
+        fe = sc.front_entity
+        if not fe or not fe.direction:
+            return
+
+        old_dir = fe.direction
+        old_conn = fe.connection
+        tc.front_entity = sc.front_entity
+        sc.front_entity = None
+
+        if fe and isinstance(fe, Entity) and fe.connection:
+
+            odx, ody = DIRECTIONS_XY[fe.connection]
+            ox = sc.x + odx
+            oy = sc.y + ody
+            oc = level.cell(ox, oy)
+            if oc:
+                self.move_bodypart(oc, sc, level)
+
+            if sc.front_entity:
+                sc.front_entity.direction = old_dir
+                sc.front_entity.connection = old_conn
+
+
+    def move_snake(self, hx, hy, level):
+        c = level.cell(hx, hy)
+        dd = c.front_entity.direction
+        cc = c.front_entity.connection
+
+        dx, dy = DIRECTIONS_XY[dd]
+        newx, newy = hx + dx, hy + dy
+        tgt_cell = level.cell(newx, newy)
+        if tgt_cell and not tgt_cell.front_entity:
+            self.move_bodypart(c, tgt_cell, level)
+
+            tgt_cell.front_entity.connection = DIRECTIONS_XY_R[(-dx, -dy)]
+        if c and c.front_entity:
+            c.front_entity.direction = dd
+            c.front_entity.connection = cc
+
+    def micro_tick(self, level, keys):
+        head_cell = None
+        for a, b, c in level.enum_cells():
+            #            print (b,a,c.front_entity)
+            if c.front_entity and isinstance(c.front_entity, SnakeHead):
+                head_cell = c
+                level.player_head = c
+                print('head is at', a, b)
+                break
+
+        if head_cell:
+            if keys[pyglet.window.key.W]:
+                head_cell.front_entity.direction = 'W'
+            if keys[pyglet.window.key.S]:
+                head_cell.front_entity.direction = 'S'
+            if keys[pyglet.window.key.A]:
+                head_cell.front_entity.direction = 'A'
+            if keys[pyglet.window.key.D]:
+                head_cell.front_entity.direction = 'D'
+
     def macro_tick(self, level, keys):
         # find snake's head
         # try to move head in its direction
@@ -164,33 +235,36 @@ class Main:
         print('macro tick')
         head_cell = None
         for a, b, c in level.enum_cells():
-#            print (b,a,c.front_entity)
-            if c.front_entity and isinstance(c.front_entity, SnakeHead):
-                head_cell = c
-                level.player_head = c
-                print('head is at', a, b)
-                break
+    #            print (b,a,c.front_entity)
+             if c.front_entity and isinstance(c.front_entity, SnakeHead):
+                 head_cell = c
+                 level.player_head = c
+                 print('head is at', a, b)
+                 break
 
         if head_cell:
-            dd = head_cell.front_entity.direction
-            if keys[pyglet.window.key.W]:
-                dd = 'W'
-            if keys[pyglet.window.key.S]:
-                dd = 'S'
-            if keys[pyglet.window.key.A]:
-                dd = 'A'
-            if keys[pyglet.window.key.D]:
-                dd = 'D'
+             if keys[pyglet.window.key.W]:
+                 head_cell.front_entity.direction = 'W'
+             if keys[pyglet.window.key.S]:
+                 head_cell.front_entity.direction = 'S'
+             if keys[pyglet.window.key.A]:
+                 head_cell.front_entity.direction = 'A'
+             if keys[pyglet.window.key.D]:
+                 head_cell.front_entity.direction = 'D'
+             dd = head_cell.front_entity.direction
 
-            dx, dy = DIRECTIONS_XY[dd]
-            newx, newy = head_cell.x + dx, head_cell.y + dy
-            tgt_cell = level.cell(newx, newy)
-            if tgt_cell and not tgt_cell.front_entity:
-                tgt_cell.front_entity = c.front_entity
-                c.front_entity = None
-            #else:
-            #    print("can't move to", newx, newy, tgt_cell, tgt_cell.front_entity)
+             self.move_snake(head_cell.x, head_cell.y, level)
 
+             '''
+                dx, dy = DIRECTIONS_XY[dd]
+                newx, newy = head_cell.x + dx, head_cell.y + dy
+                tgt_cell = level.cell(newx, newy)
+                if tgt_cell and not tgt_cell.front_entity:
+                    tgt_cell.front_entity = c.front_entity
+                    c.front_entity = None
+                #else:
+                #    print("can't move to", newx, newy, tgt_cell, tgt_cell.front_entity)
+             '''
         else:
             print('no head')
 
