@@ -46,6 +46,9 @@ class GameWindow(pyglet.window.Window):
         self.level.cell(1,0).front_entity = Apple()
         self.level.cell(5,2).front_entity = Lamp()
 
+        for a, b, c in self.level.enum_cells():
+            c.back_entity = Grass()
+
 
     def on_draw(self, dt=0):
         self.on_maybe_start()
@@ -106,6 +109,10 @@ class Entity:
 
     def on_tick(self, level):
         pass
+class Grass(Entity):
+    direction = 'W'
+    image_template = 'data/pics/grass.png'
+
 
 class SnakeHead(Entity):
     direction = 'W'
@@ -139,11 +146,11 @@ class Lamp(Entity):
         tx, ty = pd
         dx = (tx - x) * 0.01
         dy = (ty - y) * 0.01
-        print(f"{x} {y} {dx} {dy}")
+        #print(f"{x} {y} {dx} {dy}")
         for i in range(0, 100):
             c = level.cell(int(x + dx * i), int(y + dy * i))
             if c:
-                print ('lighting', c.x, c.y, i, (x + dx * i), (y + dy * i))
+                #print ('lighting', c.x, c.y, i, (x + dx * i), (y + dy * i))
                 c.light_level = 1
                 if c.front_entity and c.front_entity.blocks_light:
                     break
@@ -153,7 +160,7 @@ class Lamp(Entity):
     def on_tick(self, level):
         print ('lamp at ', self.x, self.y)
         level.cell(self.x, self.y).light_level = 1
-        for i in range(-100, 100):
+        for i in range(-100, 101):
             self.light_a_line((self.x, self.y), (self.x+i, self.y+100), level)
             self.light_a_line((self.x, self.y), (self.x+i, self.y-100), level)
             self.light_a_line((self.x, self.y), (self.x+100, self.y+i), level)
@@ -192,18 +199,32 @@ class Main:
     def __init__(self):
         self.foreground_batch = pyglet.graphics.Batch()
         self.foreground_batch_sprites = []
+        self.background_batch = pyglet.graphics.Batch()
+        self.background_batch_sprites = []
 
     def draw_level(self, level):
         self.foreground_batch_sprites = []
+        self.background_batch_sprites = []
+
         for a, b, c in level.enum_cells():
             assert isinstance(c, Cell)
+
+            if c.back_entity:
+                if c.light_level:
+                    img_name_b = c.back_entity.get_image_name()
+                    s_b = pyglet.sprite.Sprite(get_image(img_name_b), a * 64, b * 64, batch=self.background_batch)
+                    self.background_batch_sprites.append(s_b)
+                    #s_b.draw()
+
             if c.front_entity:
                 assert isinstance(c.front_entity, Entity)
-                img_name = c.front_entity.get_image_name()
-
-                s = pyglet.sprite.Sprite(get_image(img_name), a*64, b*64)
                 if c.light_level:
-                    s.draw()
+                    img_name = c.front_entity.get_image_name()
+                    s = pyglet.sprite.Sprite(get_image(img_name), a*64, b*64, batch=self.foreground_batch)
+                    self.foreground_batch_sprites.append(s)
+                    #s.draw()
+
+        self.background_batch.draw()
         self.foreground_batch.draw()
 
     def move_bodypart(self, sc, tc, level):
