@@ -43,6 +43,8 @@ class GameWindow(pyglet.window.Window):
         self.level.cell(3, 5).front_entity = SnakeTail()
 
         self.level.cell(6,7).front_entity = Apple()
+        self.level.cell(1,0).front_entity = Apple()
+        self.level.cell(5,2).front_entity = Apple()
 
 
     def on_draw(self, dt=0):
@@ -54,7 +56,7 @@ class GameWindow(pyglet.window.Window):
             self.main.macro_tick(self.level, self.keys)
 
 
-        gl.glClearColor(0.2, 0.3, 0.4, 1.0)
+        gl.glClearColor(0.0, 0.0, 0.0, 1.0)
         self.clear()
         self.main.draw_level(self.level)
         self.fps_display.draw()
@@ -178,12 +180,12 @@ class Main:
         sc.front_entity = None
 
         if fe and isinstance(fe, Entity) and fe.connection:
-
             odx, ody = DIRECTIONS_XY[fe.connection]
             ox = sc.x + odx
             oy = sc.y + ody
             oc = level.cell(ox, oy)
-            if oc:
+            if oc and oc.front_entity and (isinstance(oc.front_entity, SnakeBody)
+                                           or isinstance(oc.front_entity, SnakeTail)):
                 self.move_bodypart(oc, sc, level)
 
             if sc.front_entity:
