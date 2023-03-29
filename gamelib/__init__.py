@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import random
+
 import pyglet
 import pyglet.gl as gl
 import pyglet.font
@@ -83,8 +85,6 @@ DIRECTIONS_XY_R = {
     (-1, 0) : "A",
     (1, 0) : "D",
 }
-
-
 
 
 class Entity:
@@ -199,10 +199,36 @@ class Main:
         dx, dy = DIRECTIONS_XY[dd]
         newx, newy = hx + dx, hy + dy
         tgt_cell = level.cell(newx, newy)
+
+
         if tgt_cell and not tgt_cell.front_entity:
             self.move_bodypart(c, tgt_cell, level)
+            tgt_cell.front_entity.connection = DIRECTIONS_XY_R[(-dx, -dy)]
+
+        if tgt_cell and isinstance(tgt_cell.front_entity, Apple):
+            #self.move_bodypart(c, tgt_cell, level)
+            fe = c.front_entity
+            c.front_entity = SnakeBody()
+            c.front_entity.x = fe.x
+            c.front_entity.y = fe.y
+
+            tfe = tgt_cell.front_entity
+            tgt_cell.front_entity = fe
+            tgt_cell.front_entity.x = tfe.x
+            tgt_cell.front_entity.y = tfe.y
+
+            for r in range(1000):
+                x = random.randint(0, level.w-1)
+                y = random.randint(0, level.h-1)
+                if not level.cell(x, y).front_entity:
+                    level.cell(x, y).front_entity = Apple()
+                    level.cell(x, y).front_entity.x = x
+                    level.cell(x, y).front_entity.y = y
+                    break
+
 
             tgt_cell.front_entity.connection = DIRECTIONS_XY_R[(-dx, -dy)]
+
         if c and c.front_entity:
             c.front_entity.direction = dd
             c.front_entity.connection = cc
