@@ -44,7 +44,7 @@ class GameWindow(pyglet.window.Window):
 
         self.level.cell(6,7).front_entity = Apple()
         self.level.cell(1,0).front_entity = Apple()
-        self.level.cell(5,2).front_entity = Apple()
+        self.level.cell(5,2).front_entity = Lamp()
 
 
     def on_draw(self, dt=0):
@@ -92,6 +92,8 @@ DIRECTIONS_XY_R = {
 class Entity:
     x = 0
     y = 0
+    blocks_light = True
+    light_level = 0
     image_template = ''
 
     # points to moving direction or connected head-side body part
@@ -102,11 +104,18 @@ class Entity:
     def get_image_name(self):
         return self.image_template.replace('X', self.direction)
 
+    def on_tick(self, level):
+        pass
+
 class SnakeHead(Entity):
     direction = 'W'
     image_template = 'data/pics/snake_headX.png'
     tail_x = 0
     tail_y = 0
+
+    def on_tick(self, level):
+        print (self.x, self.y)
+        level.cell(self.x, self.y).light_level = 1
 
 class SnakeBody(Entity):
     direction = 'W'
@@ -123,13 +132,39 @@ class Apple(Entity):
 class Lamp(Entity):
     direction = 'W'
     image_template = 'data/pics/lamp.png'
+    blocks_light = False
 
+    def light_a_line(self, ps, pd, level):
+        x, y = ps
+        tx, ty = pd
+        dx = (tx - x) * 0.01
+        dy = (ty - y) * 0.01
+        print(f"{x} {y} {dx} {dy}")
+        for i in range(0, 100):
+            c = level.cell(int(x + dx * i), int(y + dy * i))
+            if c:
+                print ('lighting', c.x, c.y, i, (x + dx * i), (y + dy * i))
+                c.light_level = 1
+                if c.front_entity and c.front_entity.blocks_light:
+                    break
+            else:
+                break
+
+    def on_tick(self, level):
+        print ('lamp at ', self.x, self.y)
+        level.cell(self.x, self.y).light_level = 1
+        for i in range(-100, 100):
+            self.light_a_line((self.x, self.y), (self.x+i, self.y+100), level)
+            self.light_a_line((self.x, self.y), (self.x+i, self.y-100), level)
+            self.light_a_line((self.x, self.y), (self.x+100, self.y+i), level)
+            self.light_a_line((self.x, self.y), (self.x-100, self.y+i), level)
 
 class Cell:
     x = 0
     y = 0
     back_entity = None
     front_entity = None
+    light_level = 0
     def __init__(self, x, y):
         self.x = x
         self.y = y
@@ -148,7 +183,7 @@ class Level:
             return self.cells[x+y*self.w]
         return  None
 
-    def enum_cells(self):
+    def enum_cells(self) -> (int, int , Cell):
         for b in range(self.h):
             for a in range(self.w):
                 yield a, b, self.cell(a,b)
@@ -165,8 +200,10 @@ class Main:
             if c.front_entity:
                 assert isinstance(c.front_entity, Entity)
                 img_name = c.front_entity.get_image_name()
+
                 s = pyglet.sprite.Sprite(get_image(img_name), a*64, b*64)
-                s.draw()
+                if c.light_level:
+                    s.draw()
         self.foreground_batch.draw()
 
     def move_bodypart(self, sc, tc, level):
@@ -237,6 +274,16 @@ class Main:
 
     def micro_tick(self, level, keys):
         head_cell = None
+
+        for a, b, c in level.enum_cells():
+            c.light_level = 0
+
+        for a, b, c in level.enum_cells():
+            if c.front_entity:
+                c.front_entity.x = a
+                c.front_entity.y = b
+                c.front_entity.on_tick(level)
+
         for a, b, c in level.enum_cells():
             #            print (b,a,c.front_entity)
             if c.front_entity and isinstance(c.front_entity, SnakeHead):
@@ -262,6 +309,7 @@ class Main:
         # update body parts location
         print('macro tick')
         head_cell = None
+
         for a, b, c in level.enum_cells():
     #            print (b,a,c.front_entity)
              if c.front_entity and isinstance(c.front_entity, SnakeHead):
