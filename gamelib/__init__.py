@@ -124,8 +124,9 @@ class SnakeHead(Entity):
     tail_y = 0
 
     def on_tick(self, level):
-        print (self.x, self.y)
-        level.cell(self.x, self.y).light_level = 1
+        pass
+        #print (self.x, self.y)
+        #level.cell(self.x, self.y).light_level = 100
 
 class SnakeBody(Entity):
     direction = 'W'
@@ -167,15 +168,15 @@ class Lamp(Entity):
             c = level.cell(int(x + dx * i), int(y + dy * i))
             if c:
                 #print ('lighting', c.x, c.y, i, (x + dx * i), (y + dy * i))
-                c.light_level = 1
+                c.light_level = max(c.light_level, 100-i*20)
                 if c.front_entity and c.front_entity.blocks_light:
                     break
             else:
                 break
 
     def on_tick(self, level):
-        print ('lamp at ', self.x, self.y)
-        level.cell(self.x, self.y).light_level = 1
+        #print ('lamp at ', self.x, self.y)
+        level.cell(self.x, self.y).light_level = 100
         for i in range(-100, 101):
             self.light_a_line((self.x, self.y), (self.x+i, self.y+100), level)
             self.light_a_line((self.x, self.y), (self.x+i, self.y-100), level)
@@ -194,7 +195,7 @@ class Cell:
 
 class Level:
     def __init__(self):
-        self.w = 8
+        self.w = 12
         self.h = 8
         self.cells = [Cell(a,b)
             for b in range(self.h)
@@ -217,12 +218,30 @@ class Main:
         self.foreground_batch_sprites = []
         self.background_batch = pyglet.graphics.Batch()
         self.background_batch_sprites = []
+        self.dark_batch = pyglet.graphics.Batch()
         self.last_dir = 'S'
+        self.darkness_sprite = pyglet.sprite.Sprite(get_image('data/pics/darkness.png'))
+        self.darkness_sprite.opacity = 10
 
     def draw_level(self, level):
         self.foreground_batch_sprites = []
+        self.dark_batch_sprites = []
         self.background_batch_sprites = []
+        # diffuse lights
+        '''
+        for a, b, c in level.enum_cells():
+            lsum = 0
+            lcnt = 0
+            for (da,db) in ((0,0), (1,0), (-1,0), (0,1), (0,-1)):
+                    oc = level.cell(a+da, b+db)
+                    if oc:
+                        lsum += oc.light_level
+                        lcnt += 1
+            c.new_light_level = lsum // lcnt
 
+        for a, b, c in level.enum_cells():
+            c.light_level = c.new_light_level
+        '''
         for a, b, c in level.enum_cells():
             assert isinstance(c, Cell)
 
@@ -235,14 +254,22 @@ class Main:
 
             if c.front_entity:
                 assert isinstance(c.front_entity, Entity)
-                if c.light_level:
+                if c.light_level or (c.front_entity and isinstance(c.front_entity, SnakeHead)):
                     img_name = c.front_entity.get_image_name()
                     s = pyglet.sprite.Sprite(get_image(img_name), a*64, b*64, batch=self.foreground_batch)
                     self.foreground_batch_sprites.append(s)
                     #s.draw()
 
+            if c.light_level<100:
+                ds = pyglet.sprite.Sprite(get_image('data/pics/darkness.png'), a*64, b*64, batch=self.dark_batch)
+                ds.opacity = max(0, 200 - 3*c.light_level)
+                self.dark_batch_sprites.append(ds)
+
+
+
         self.background_batch.draw()
         self.foreground_batch.draw()
+        self.dark_batch.draw()
 
     def move_bodypart(self, sc, tc, level):
         fe = sc.front_entity
