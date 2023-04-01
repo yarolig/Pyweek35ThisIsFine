@@ -23,6 +23,8 @@ def play_sound(fn):
     s = get_sound(fn)
     s.play()
 
+MODE_NORMAL = 0
+MODE_OBJECTIVES = 1
 
 class GameWindow(pyglet.window.Window):
     def __init__(self, *args, **kwargs):
@@ -33,18 +35,27 @@ class GameWindow(pyglet.window.Window):
         #self.push_handlers(self.keys)
         self.started = False
         self.ticks = 0
+        self.mode = MODE_NORMAL
 
-        #pyglet.font.add_directory("data/fonts")        #self.font = pyglet.font.load("Funtype", 8, False, False)
+        pyglet.font.add_directory("data/fonts")        #self.font = pyglet.font.load("Funtype", 8, False, False)
+        self.font = pyglet.font.load('Constantine')
         #print (self.font)
 
 
-        #self.label = pyglet.text.Label('Hello, world', x=10, y=10)
-        #                                font_name="Constantine",
-        #                                font_size=12,x=10, y=10)
+    def objectives_onkey_instead(self, symbol, modifiers):
+        self.mode = MODE_NORMAL
 
     def on_key_press(self, symbol, modifiers):
-        print('on_key_press', pyglet.window.key.symbol_string(symbol), modifiers)
-        print((symbol, 'in', (pyglet.window.key.W, pyglet.window.key.UP)))
+        #print('on_key_press', pyglet.window.key.symbol_string(symbol), modifiers)
+        #print((symbol, 'in', (pyglet.window.key.W, pyglet.window.key.UP)))
+
+
+        if self.mode == MODE_OBJECTIVES:
+            return self.objectives_onkey_instead(symbol, modifiers)
+
+        if symbol in (pyglet.window.key.O,pyglet.window.key.F1 ):
+            self.mode = MODE_OBJECTIVES
+
         if symbol in (pyglet.window.key.W, pyglet.window.key.UP):
             self.main.last_dir = 'W'
 
@@ -65,37 +76,60 @@ class GameWindow(pyglet.window.Window):
         self.started = True
 
         self.main = Main()
-        self.level = Level()
 
+        self.load_first_level()
+
+    def load_first_level(self):
+        self.level = Level()
         for a, b, c in self.level.enum_cells():
             c.back_entity = Grass()
-
         self.level.cell(3, 3).front_entity = SnakeHead()
         self.level.cell(3, 3).front_entity.connection = 'W'
         self.level.cell(3, 3).front_entity.direction = 'S'
-
         self.level.cell(3, 4).front_entity = SnakeBody()
         self.level.cell(3, 4).front_entity.connection = 'W'
         self.level.cell(3, 4).front_entity.direction = 'S'
-
         self.level.cell(3, 5).back_entity = Basket()
         self.level.cell(3, 5).front_entity = SnakeTail()
         self.level.cell(3, 5).front_entity.direction = 'S'
-
-        self.level.cell(6,7).front_entity = Apple()
-        self.level.cell(1,0).front_entity = Apple()
-        self.level.cell(5,2).front_entity = Lamp()
-
-
-        self.level.cell(1,1).front_entity = Fire()
-
-
+        self.level.cell(6, 7).front_entity = Apple()
+        self.level.cell(1, 0).front_entity = Apple()
+        self.level.cell(5, 2).front_entity = Lamp()
+        self.level.cell(1, 1).front_entity = Fire()
         self.level.cell(7, 2).front_entity = Bird()
 
+    def load_next_level(self):
+        self.level = self.level.next_level()
+
+    def draw_objectives_instead(self):
+
+        gl.glClearColor(0.0, 0.0, 0.0, 1.0)
+        self.clear()
+
+        self.label = pyglet.text.Label(self.level.title,
+                                        font_size=24, x=int(self.width * 0.33), y=self.height - 50)
+        self.olist = []
+        n = 0
+        for i in self.level.objectives:
+            n += 1
+            lbl = pyglet.text.Label(i, font_size=16,
+                                                x=int(self.width * 0.03),
+                                                y=self.height - 150 - n * 20)
+            lbl.draw()
+            self.olist.append(lbl)
+        self.label.draw()
 
 
     def on_draw(self, dt=0):
         self.on_maybe_start()
+
+        if self.mode == MODE_OBJECTIVES:
+            return self.draw_objectives_instead()
+
+        if self.level.level_is_win:
+            self.load_next_level()
+            self.mode = MODE_OBJECTIVES
+            return
         self.ticks += 1
 
         self.main.micro_tick(self.level, {})
@@ -225,6 +259,7 @@ class Bird(Entity):
                     and c.light_level>0
                 ):
                     self.fly_away = max(self.fly_away, 1)
+                    self.edible = False
                     play_sound('data/sound/'+random.choice(['fly-away3.ogg', 'fly-away2.ogg']))
     def get_image_name(self):
         if self.fly_away > 10:
@@ -325,10 +360,57 @@ class Level:
     def __init__(self):
         self.w = 12
         self.h = 8
+        self.level_is_win = False
         self.cells = [Cell(a,b)
             for b in range(self.h)
             for a in range(self.w)]
         self.player_head = None
+        self.title = "Level 1"
+        self.objectives = ['Use arrow-keys or WSAD to change direction.',
+                           'Press O to review your goals.',
+                           '',
+                           'Eat at least 10 things and return to your basket.',
+                           '','','',
+                           'Press eny key to continue']
+    def get_stats(self):
+        stats = {}
+        for a, b, c in self.enum_cells():
+            assert isinstance(c, Cell)
+            cl = c.front_entity.__class__
+
+            if cl in stats:
+                stats[cl] += 1
+            else:
+                stats[cl] =1
+        return stats
+
+    def on_update(self):
+        snake_len = 2
+        head_at_basket = False
+        stats = self.get_stats()
+        print(stats)
+        for a, b, c in self.enum_cells():
+            assert isinstance(c, Cell)
+            if isinstance(c.front_entity, SnakeBody):
+                snake_len += 1
+            if isinstance(c.front_entity, SnakeHead) and isinstance(c.back_entity, Basket):
+                head_at_basket = True
+        if stats.get(SnakeBody, 0) >= 2 and head_at_basket:
+            self.level_is_win = True
+
+    def next_level(self):
+        return Level2()
+
+    def spawn_snake(self, sx, sy):
+        self.cell(sx, sy).front_entity = SnakeHead()
+        self.cell(sx, sy).front_entity.connection = 'W'
+        self.cell(sx, sy).front_entity.direction = 'S'
+        self.cell(sx, sy + 1).front_entity = SnakeBody()
+        self.cell(sx, sy + 1).front_entity.connection = 'W'
+        self.cell(sx, sy + 1).front_entity.direction = 'S'
+        self.cell(sx, sy + 2).back_entity = Basket()
+        self.cell(sx, sy + 2).front_entity = SnakeTail()
+        self.cell(sx, sy + 2).front_entity.direction = 'S'
 
     def cell(self, x ,y) -> Cell:
         if (0 <= x < self.w) and (0 <= y < self.h):
@@ -339,6 +421,255 @@ class Level:
         for b in range(self.h):
             for a in range(self.w):
                 yield a, b, self.cell(a,b)
+
+
+
+class Level2(Level):
+    def __init__(self):
+        self.w = 14
+        self.h = 8
+        self.level_is_win = False
+        self.cells = [Cell(a,b)
+            for b in range(self.h)
+            for a in range(self.w)]
+        self.player_head = None
+        self.title = "Level 2"
+        self.objectives = ['Eat at least 10 things',
+                           '(optional) DO not eat any apples.',
+                           '',
+                           'When ready return to your basket.',
+                           '','','',
+                           'Press eny key to continue']
+        self.init()
+
+    def init(self):
+        for a, b, c in self.enum_cells():
+            c.back_entity = Grass()
+
+        self.spawn_snake(3, 3)
+
+        #self.cell(6, 7).front_entity = Apple()
+        #self.cell(1, 0).front_entity = Apple()
+        for i in range(2):
+            for t in range(1000):
+                x = random.randint(0, self.w-1)
+                y = random.randint(0, self.h-1)
+                if not self.cell(x, y).front_entity:
+                    self.cell(x, y).front_entity = Lamp()
+                    break
+
+        #self.cell(1, 1).front_entity = Fire()
+        #self.cell(7, 2).front_entity = Bird()
+        for i in range(5):
+            for t in range(1000):
+                x = random.randint(0, self.w-1)
+                y = random.randint(0, self.h-1)
+                if not self.cell(x, y).front_entity:
+                    self.cell(x, y).front_entity = Bird()
+                    break
+
+    def on_update(self):
+        snake_len = 2
+        head_at_basket = False
+
+        for a, b, c in self.enum_cells():
+            assert isinstance(c, Cell)
+            if isinstance(c.front_entity, SnakeBody):
+                snake_len += 1
+            if isinstance(c.front_entity, SnakeHead) and isinstance(c.back_entity, Basket):
+                head_at_basket = True
+        if snake_len >= 2 and head_at_basket:
+            self.level_is_win = True
+
+    def next_level(self):
+        return Level3()
+
+
+
+
+class Level3(Level):
+    def __init__(self):
+        self.w = 14
+        self.h = 8
+        self.level_is_win = False
+        self.cells = [Cell(a,b)
+            for b in range(self.h)
+            for a in range(self.w)]
+        self.player_head = None
+        self.title = "Level 3"
+        self.objectives = ['Eat at least 10 things',
+                           '(optional) DO not eat any apples.',
+                           '',
+                           'When ready return to your basket.',
+                           '','','',
+                           'Press eny key to continue']
+        self.init()
+
+    def init(self):
+        for a, b, c in self.enum_cells():
+            c.back_entity = Grass()
+
+        self.spawn_snake(3, 3)
+
+        #self.cell(6, 7).front_entity = Apple()
+        #self.cell(1, 0).front_entity = Apple()
+        for i in range(2):
+            for t in range(1000):
+                x = random.randint(0, self.w-1)
+                y = random.randint(0, self.h-1)
+                if not self.cell(x, y).front_entity:
+                    self.cell(x, y).front_entity = Lamp()
+                    break
+
+        #self.cell(1, 1).front_entity = Fire()
+        #self.cell(7, 2).front_entity = Bird()
+        for i in range(5):
+            for t in range(1000):
+                x = random.randint(0, self.w-1)
+                y = random.randint(0, self.h-1)
+                if not self.cell(x, y).front_entity:
+                    self.cell(x, y).front_entity = Bird()
+                    break
+
+    def on_update(self):
+        snake_len = 2
+        head_at_basket = False
+
+        for a, b, c in self.enum_cells():
+            assert isinstance(c, Cell)
+            if isinstance(c.front_entity, SnakeBody):
+                snake_len += 1
+            if isinstance(c.front_entity, SnakeHead) and isinstance(c.back_entity, Basket):
+                head_at_basket = True
+        if snake_len >= 2 and head_at_basket:
+            self.level_is_win = True
+
+    def next_level(self):
+        return Level4()
+
+
+
+class Level4(Level):
+    def __init__(self):
+        self.w = 14
+        self.h = 8
+        self.level_is_win = False
+        self.cells = [Cell(a,b)
+            for b in range(self.h)
+            for a in range(self.w)]
+        self.player_head = None
+        self.title = "Level 4"
+        self.objectives = ['Eat at least 10 things',
+                           '(optional) DO not eat any apples.',
+                           '',
+                           'When ready return to your basket.',
+                           '','','',
+                           'Press eny key to continue']
+        self.init()
+
+    def init(self):
+        for a, b, c in self.enum_cells():
+            c.back_entity = Grass()
+
+        self.spawn_snake(3, 3)
+
+        #self.cell(6, 7).front_entity = Apple()
+        #self.cell(1, 0).front_entity = Apple()
+        for i in range(2):
+            for t in range(1000):
+                x = random.randint(0, self.w-1)
+                y = random.randint(0, self.h-1)
+                if not self.cell(x, y).front_entity:
+                    self.cell(x, y).front_entity = Lamp()
+                    break
+
+        #self.cell(1, 1).front_entity = Fire()
+        #self.cell(7, 2).front_entity = Bird()
+        for i in range(5):
+            for t in range(1000):
+                x = random.randint(0, self.w-1)
+                y = random.randint(0, self.h-1)
+                if not self.cell(x, y).front_entity:
+                    self.cell(x, y).front_entity = Bird()
+                    break
+
+    def on_update(self):
+        snake_len = 2
+        head_at_basket = False
+
+        for a, b, c in self.enum_cells():
+            assert isinstance(c, Cell)
+            if isinstance(c.front_entity, SnakeBody):
+                snake_len += 1
+            if isinstance(c.front_entity, SnakeHead) and isinstance(c.back_entity, Basket):
+                head_at_basket = True
+        if snake_len >= 2 and head_at_basket:
+            self.level_is_win = True
+
+    def next_level(self):
+        return Level5()
+
+
+
+class Level5(Level):
+    def __init__(self):
+        self.w = 14
+        self.h = 8
+        self.level_is_win = False
+        self.cells = [Cell(a,b)
+            for b in range(self.h)
+            for a in range(self.w)]
+        self.player_head = None
+        self.title = "Level 5"
+        self.objectives = ['Eat at least 10 things',
+                           '(optional) DO not eat any apples.',
+                           '',
+                           'When ready return to your basket.',
+                           '','','',
+                           'Press eny key to continue']
+        self.init()
+
+    def init(self):
+        for a, b, c in self.enum_cells():
+            c.back_entity = Grass()
+
+        self.spawn_snake(3, 3)
+
+        #self.cell(6, 7).front_entity = Apple()
+        #self.cell(1, 0).front_entity = Apple()
+        for i in range(2):
+            for t in range(1000):
+                x = random.randint(0, self.w-1)
+                y = random.randint(0, self.h-1)
+                if not self.cell(x, y).front_entity:
+                    self.cell(x, y).front_entity = Lamp()
+                    break
+
+        #self.cell(1, 1).front_entity = Fire()
+        #self.cell(7, 2).front_entity = Bird()
+        for i in range(5):
+            for t in range(1000):
+                x = random.randint(0, self.w-1)
+                y = random.randint(0, self.h-1)
+                if not self.cell(x, y).front_entity:
+                    self.cell(x, y).front_entity = Bird()
+                    break
+
+    def on_update(self):
+        snake_len = 2
+        head_at_basket = False
+
+        for a, b, c in self.enum_cells():
+            assert isinstance(c, Cell)
+            if isinstance(c.front_entity, SnakeBody):
+                snake_len += 1
+            if isinstance(c.front_entity, SnakeHead) and isinstance(c.back_entity, Basket):
+                head_at_basket = True
+        if snake_len >= 2 and head_at_basket:
+            self.level_is_win = True
+
+    def next_level(self):
+        return LevelWin()
 
 class Main:
     def __init__(self):
@@ -438,11 +769,21 @@ class Main:
             tgt_cell.front_entity.connection = DIRECTIONS_XY_R[(-dx, -dy)]
             tgt_cell.front_entity.direction = dd
 
-        if tgt_cell and tgt_cell.front_entity and (tgt_cell.front_entity.edible
-                                                   or isinstance(tgt_cell.front_entity, Fire)
-                                                   or isinstance(tgt_cell.front_entity, Lamp)
+        elif tgt_cell and (isinstance(tgt_cell.front_entity, Fire)
+                           or isinstance(tgt_cell.front_entity, Lamp)):
+            if isinstance(tgt_cell.front_entity, Lamp) and not isinstance(tgt_cell.front_entity, Fire):
+                spread_fire(tgt_cell.front_entity, level)
 
-        ):
+            tgt_cell.front_entity = None
+            self.move_bodypart(c, tgt_cell, level)
+            tgt_cell.front_entity.connection = DIRECTIONS_XY_R[(-dx, -dy)]
+            tgt_cell.front_entity.direction = dd
+
+
+
+
+        elif tgt_cell and tgt_cell.front_entity and (tgt_cell.front_entity.edible):
+            ed = tgt_cell.front_entity.edible
             if tgt_cell.front_entity.edible:
                 play_sound('data/sound/' + random.choice(['eat1.ogg', 'eat2.ogg']))
 
@@ -467,6 +808,8 @@ class Main:
 
 
             tgt_cell.front_entity.connection = DIRECTIONS_XY_R[(-dx, -dy)]
+            if not ed:
+                self.move_bodypart(c, tgt_cell, level)
 
         if c and c.front_entity:
             c.front_entity.direction = dd
@@ -551,7 +894,7 @@ class Main:
         for a, b, c in level.enum_cells():
             if c.front_entity:
                 c.front_entity.on_tick_after_light(level)
-
+        level.on_update()
 
         '''
                 dx, dy = DIRECTIONS_XY[dd]
