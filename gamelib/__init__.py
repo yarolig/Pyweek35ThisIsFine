@@ -4,7 +4,6 @@ import random
 import pyglet
 import pyglet.gl as gl
 import pyglet.font
-from pyglet.graphics.shader import Shader, ShaderProgram
 
 pyglet.options['audio'] = ('openal', 'pulse', 'xaudio2', 'directsound')
 import pyglet.media
@@ -29,7 +28,7 @@ MODE_OBJECTIVES = 1
 class GameWindow(pyglet.window.Window):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fps_display = pyglet.window.FPSDisplay(self)
+        #self.fps_display = pyglet.window.FPSDisplay(self)
         self.set_caption("Pyweek35 This is fine")
         #self.keys = pyglet.window.key.KeyStateHandler()
         #self.push_handlers(self.keys)
@@ -37,8 +36,8 @@ class GameWindow(pyglet.window.Window):
         self.ticks = 0
         self.mode = MODE_OBJECTIVES
 
-        pyglet.font.add_directory("data/fonts")        #self.font = pyglet.font.load("Funtype", 8, False, False)
-        self.font = pyglet.font.load('Constantine')
+        #pyglet.font.add_directory("data/fonts")        #self.font = pyglet.font.load("Funtype", 8, False, False)
+        #self.font = pyglet.font.load('Constantine')
         #print (self.font)
 
 
@@ -138,7 +137,7 @@ class GameWindow(pyglet.window.Window):
         gl.glClearColor(0.0, 0.0, 0.0, 1.0)
         self.clear()
         self.main.draw_level(self.level)
-        self.fps_display.draw()
+        #self.fps_display.draw()
 
 
 
@@ -954,7 +953,7 @@ S......#.....#
 
         self.spawn_mushrooms(stats, 5, 20)
         self.spawn_apples(stats, 1, 20)
-        self.spawn_fires(stats, 1, 1)
+        #self.spawn_fires(stats, 1, 1)
         if stats.get(Fire, 0) == 0 and head_at_basket:
             self.level_is_win = True
 
@@ -1123,7 +1122,7 @@ class Main:
         c = level.cell(hx, hy)
         dd = self.last_dir # c.front_entity.direction
         cc = c.front_entity.connection
-        print(f'{dd=}')
+        #print(f'{dd=}')
         dx, dy = DIRECTIONS_XY[dd]
         newx, newy = hx + dx, hy + dy
         tgt_cell = level.cell(newx, newy)
