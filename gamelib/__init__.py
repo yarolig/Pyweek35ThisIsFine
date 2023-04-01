@@ -5,17 +5,21 @@ import pyglet
 import pyglet.gl as gl
 import pyglet.font
 
-pyglet.options['audio'] = ('openal', 'pulse', 'xaudio2', 'directsound')
+pyglet.options['audio'] = ( 'directsound', 'xaudio2', 'openal', 'pulse', )
 import pyglet.media
 player = None
 
+
+import pyglet.clock
+
+TICKS_PER_MACRO = 20
 
 all_sounds = {}
 def get_sound(name):
     global  all_sounds
     if name in all_sounds:
         return all_sounds[name]
-    all_sounds[name] = pyglet.media.load(name, streaming=False)
+    all_sounds[name] = pyglet.media.StaticSource(pyglet.media.load(name, streaming=False))
     return all_sounds[name]
 
 def play_sound(fn):
@@ -28,13 +32,15 @@ MODE_OBJECTIVES = 1
 class GameWindow(pyglet.window.Window):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        #self.fps_display = pyglet.window.FPSDisplay(self)
+        self.fps_display = pyglet.window.FPSDisplay(self)
         self.set_caption("Pyweek35 The fine dinner")
         #self.keys = pyglet.window.key.KeyStateHandler()
         #self.push_handlers(self.keys)
         self.started = False
         self.ticks = 0
+        self.time_to_macro = False
         self.mode = MODE_OBJECTIVES
+        self.clock = pyglet.clock.schedule_interval(self.on_timer, 0.3)
 
         #pyglet.font.add_directory("data/fonts")        #self.font = pyglet.font.load("Funtype", 8, False, False)
         #self.font = pyglet.font.load('Constantine')
@@ -117,6 +123,9 @@ class GameWindow(pyglet.window.Window):
         self.label.draw()
 
 
+    def on_timer(self, dt):
+        self.time_to_macro = True
+
     def on_draw(self, dt=0):
         self.on_maybe_start()
 
@@ -130,8 +139,9 @@ class GameWindow(pyglet.window.Window):
         self.ticks += 1
 
         self.main.micro_tick(self.level, {})
-        if self.ticks % 20 == 0:
+        if self.time_to_macro:
             self.main.macro_tick(self.level, {})
+            self.time_to_macro = False
 
 
         gl.glClearColor(0.0, 0.0, 0.0, 1.0)
@@ -272,11 +282,11 @@ class Bird(Entity):
                     self.edible = False
                     play_sound('data/sound/'+random.choice(['fly-away3.ogg', 'fly-away2.ogg']))
     def get_image_name(self):
-        if self.fly_away > 10:
+        if self.fly_away > TICKS_PER_MACRO / 2:
             self.fly_away += 1
             return self.image_template.replace('X', '2')
 
-        if self.fly_away > 5:
+        if self.fly_away > TICKS_PER_MACRO / 4:
             self.fly_away += 1
             return self.image_template.replace('X', '2')
 
@@ -398,6 +408,7 @@ class Level:
     def init(self):
         for a, b, c in self.enum_cells():
             c.back_entity = Grass()
+        play_sound('data/sound/drop.ogg')
         '''
         self.cell(3, 3).front_entity = SnakeHead()
         self.cell(3, 3).front_entity.connection = 'W'
@@ -487,6 +498,16 @@ class Level:
 
 
     def on_update(self):
+
+        # precache sounds
+        get_sound('data/sound/drop.ogg')
+        get_sound('data/sound/eat1.ogg')
+        get_sound('data/sound/eat2.ogg')
+        get_sound('data/sound/fly-away1.ogg')
+        get_sound('data/sound/fly-away2.ogg')
+        get_sound('data/sound/fly-away3.ogg')
+
+
         snake_len = 2
         head_at_basket = False
         stats = self.get_stats()
@@ -1288,6 +1309,6 @@ def main():
                        )
     #print (config)
 
-    gw = GameWindow(config=config, resizable=True)
+    gw = GameWindow(width=960, height=540, config=config, resizable=True)
     #print(gw.context)
     pyglet.app.run()
