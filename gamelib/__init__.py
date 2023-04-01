@@ -34,8 +34,7 @@ class GameWindow(pyglet.window.Window):
         self.started = False
         self.ticks = 0
 
-        #pyglet.font.add_directory("data/fonts")
-        #self.font = pyglet.font.load("Funtype", 8, False, False)
+        #pyglet.font.add_directory("data/fonts")        #self.font = pyglet.font.load("Funtype", 8, False, False)
         #print (self.font)
 
 
@@ -68,6 +67,9 @@ class GameWindow(pyglet.window.Window):
         self.main = Main()
         self.level = Level()
 
+        for a, b, c in self.level.enum_cells():
+            c.back_entity = Grass()
+
         self.level.cell(3, 3).front_entity = SnakeHead()
         self.level.cell(3, 3).front_entity.connection = 'W'
         self.level.cell(3, 3).front_entity.direction = 'S'
@@ -76,6 +78,7 @@ class GameWindow(pyglet.window.Window):
         self.level.cell(3, 4).front_entity.connection = 'W'
         self.level.cell(3, 4).front_entity.direction = 'S'
 
+        self.level.cell(3, 5).back_entity = Basket()
         self.level.cell(3, 5).front_entity = SnakeTail()
         self.level.cell(3, 5).front_entity.direction = 'S'
 
@@ -84,10 +87,11 @@ class GameWindow(pyglet.window.Window):
         self.level.cell(5,2).front_entity = Lamp()
 
 
+        self.level.cell(1,1).front_entity = Fire()
+
+
         self.level.cell(7, 2).front_entity = Bird()
 
-        for a, b, c in self.level.enum_cells():
-            c.back_entity = Grass()
 
 
     def on_draw(self, dt=0):
@@ -157,6 +161,10 @@ class Entity:
 class Grass(Entity):
     direction = 'W'
     image_template = 'data/pics/grass.png'
+
+class Basket(Entity):
+    direction = 'W'
+    image_template = 'data/pics/basket.png'
 
 
 class SnakeHead(Entity):
@@ -236,7 +244,9 @@ class Lamp(Entity):
     direction = 'W'
     image_template = 'data/pics/lamp.png'
     blocks_light = False
+    LDD = 100
     LD = 100
+    DIM = 5
 
     def light_a_line(self, ps, pd, level):
         x, y = ps
@@ -248,11 +258,12 @@ class Lamp(Entity):
             c = level.cell(int(x + 0.5 + dx * i), int(y + 0.5 + dy * i))
             if c:
                 #print ('lighting', c.x, c.y, i, (x + dx * i), (y + dy * i))
-                c.light_level = int(max(c.light_level, 100 - self.LD * i / 5))
+                c.light_level = int(max(c.light_level, self.LDD - self.LD * i / self.DIM))
                 if c.front_entity and c.front_entity.blocks_light:
                     break
             else:
                 break
+
 
     def on_tick(self, level):
         #print ('lamp at ', self.x, self.y)
@@ -262,6 +273,43 @@ class Lamp(Entity):
             self.light_a_line((self.x, self.y), (self.x+i, self.y-self.LD), level)
             self.light_a_line((self.x, self.y), (self.x+self.LD, self.y+i), level)
             self.light_a_line((self.x, self.y), (self.x-self.LD, self.y+i), level)
+
+
+
+class Fire(Lamp):
+    LDD = 100
+    LD = 4
+    DIM = 0.1
+    image_template = 'data/pics/fireX.png'
+    blocks_light = False
+
+    def __init__(self):
+        self.time = 100
+    def get_image_name(self):
+        return self.image_template.replace('X', random.choice('12'))
+
+    def on_tick_after_light(self, level):
+        self.time += 1
+        if self.time < 50:
+            return
+
+        if random.randint(0, 10) != 1:
+            return
+
+        spread_fire(self, level, 'regular')
+        self.time = 0
+
+def spread_fire(s, level, comment=''):
+    print('spread fire from', s.x, s.y, s)
+    for a in range(-1, 2):
+        for b in range(-1, 2):
+            c = level.cell(s.x + a, s.y + b)
+            if (c and not c.front_entity
+                    and isinstance(c.back_entity, Grass)
+            ):
+                c.front_entity = Fire()
+                c.front_entity.time = 0
+
 
 class Cell:
     x = 0
@@ -390,8 +438,19 @@ class Main:
             tgt_cell.front_entity.connection = DIRECTIONS_XY_R[(-dx, -dy)]
             tgt_cell.front_entity.direction = dd
 
-        if tgt_cell and tgt_cell.front_entity and tgt_cell.front_entity.edible:
-            play_sound('data/sound/' + random.choice(['eat1.ogg', 'eat2.ogg']))
+        if tgt_cell and tgt_cell.front_entity and (tgt_cell.front_entity.edible
+                                                   or isinstance(tgt_cell.front_entity, Fire)
+                                                   or isinstance(tgt_cell.front_entity, Lamp)
+
+        ):
+            if tgt_cell.front_entity.edible:
+                play_sound('data/sound/' + random.choice(['eat1.ogg', 'eat2.ogg']))
+
+            if isinstance(tgt_cell.front_entity, Lamp) and not isinstance(tgt_cell.front_entity, Fire):
+                spread_fire(tgt_cell.front_entity, level)
+                pass
+                # spread fire
+
             #self.move_bodypart(c, tgt_cell, level)
             fe = c.front_entity
             c.front_entity = SnakeBody()
@@ -404,18 +463,7 @@ class Main:
             tgt_cell.front_entity.y = tfe.y
             tgt_cell.front_entity.direction = dd
 
-            for r in range(1000):
-                x = random.randint(0, level.w-1)
-                y = random.randint(0, level.h-1)
-                if not level.cell(x, y).front_entity:
-                    if random.randint(1,10) < 6:
-                        e = Apple()
-                    else:
-                        e = Bird()
-                    level.cell(x, y).front_entity = e
-                    level.cell(x, y).front_entity.x = x
-                    level.cell(x, y).front_entity.y = y
-                    break
+            self.spawn_food(level)
 
 
             tgt_cell.front_entity.connection = DIRECTIONS_XY_R[(-dx, -dy)]
@@ -424,22 +472,24 @@ class Main:
             c.front_entity.direction = dd
             c.front_entity.connection = cc
 
+    def spawn_food(self, level):
+        for r in range(1000):
+            x = random.randint(0, level.w - 1)
+            y = random.randint(0, level.h - 1)
+            if not level.cell(x, y).front_entity:
+                if random.randint(1, 10) < 6:
+                    e = Apple()
+                else:
+                    e = Bird()
+                level.cell(x, y).front_entity = e
+                level.cell(x, y).front_entity.x = x
+                level.cell(x, y).front_entity.y = y
+                break
+
     def micro_tick(self, level, keys):
         head_cell = None
 
-        for a, b, c in level.enum_cells():
-            c.light_level = 0
 
-        for a, b, c in level.enum_cells():
-            if c.front_entity:
-                c.front_entity.x = a
-                c.front_entity.y = b
-                c.front_entity.on_tick(level)
-
-
-        for a, b, c in level.enum_cells():
-            if c.front_entity:
-                c.front_entity.on_tick_after_light(level)
 
         for a, b, c in level.enum_cells():
             #            print (b,a,c.front_entity)
@@ -467,6 +517,14 @@ class Main:
         # update body parts location
         #print('macro tick')
         head_cell = None
+        for a, b, c in level.enum_cells():
+            c.light_level = 0
+
+        for a, b, c in level.enum_cells():
+            if c.front_entity:
+                c.front_entity.x = a
+                c.front_entity.y = b
+                c.front_entity.on_tick(level)
 
         for a, b, c in level.enum_cells():
     #            print (b,a,c.front_entity)
@@ -489,6 +547,11 @@ class Main:
         '''
         if head_cell:
             self.move_snake(head_cell.x, head_cell.y, level)
+
+        for a, b, c in level.enum_cells():
+            if c.front_entity:
+                c.front_entity.on_tick_after_light(level)
+
 
         '''
                 dx, dy = DIRECTIONS_XY[dd]
