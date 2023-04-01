@@ -6,6 +6,23 @@ import pyglet.gl as gl
 import pyglet.font
 from pyglet.graphics.shader import Shader, ShaderProgram
 
+pyglet.options['audio'] = ('openal', 'pulse', 'xaudio2', 'directsound')
+import pyglet.media
+player = None
+
+
+all_sounds = {}
+def get_sound(name):
+    global  all_sounds
+    if name in all_sounds:
+        return all_sounds[name]
+    all_sounds[name] = pyglet.media.load(name, streaming=False)
+    return all_sounds[name]
+
+def play_sound(fn):
+    s = get_sound(fn)
+    s.play()
+
 
 class GameWindow(pyglet.window.Window):
     def __init__(self, *args, **kwargs):
@@ -190,7 +207,8 @@ class Bird(Entity):
         if self.fly_away > 10:
             level.cell(self.x, self.y).front_entity = None
             return
-
+        if self.fly_away:
+            return
         for a in range(-1, 2):
             for b in range(-1, 2):
                 c = level.cell(self.x+a, self.y+b)
@@ -199,7 +217,7 @@ class Bird(Entity):
                     and c.light_level>0
                 ):
                     self.fly_away = max(self.fly_away, 1)
-
+                    play_sound('data/sound/'+random.choice(['fly-away3.ogg', 'fly-away2.ogg']))
     def get_image_name(self):
         if self.fly_away > 10:
             self.fly_away += 1
@@ -230,7 +248,7 @@ class Lamp(Entity):
             c = level.cell(int(x + 0.5 + dx * i), int(y + 0.5 + dy * i))
             if c:
                 #print ('lighting', c.x, c.y, i, (x + dx * i), (y + dy * i))
-                c.light_level = int(max(c.light_level, 100 - self.LD * i /5))
+                c.light_level = int(max(c.light_level, 100 - self.LD * i / 5))
                 if c.front_entity and c.front_entity.blocks_light:
                     break
             else:
@@ -373,6 +391,7 @@ class Main:
             tgt_cell.front_entity.direction = dd
 
         if tgt_cell and tgt_cell.front_entity and tgt_cell.front_entity.edible:
+            play_sound('data/sound/' + random.choice(['eat1.ogg', 'eat2.ogg']))
             #self.move_bodypart(c, tgt_cell, level)
             fe = c.front_entity
             c.front_entity = SnakeBody()
@@ -496,6 +515,7 @@ def main():
                        #debug=True
                        )
     #print (config)
+
     gw = GameWindow(config=config, resizable=True)
     #print(gw.context)
     pyglet.app.run()
