@@ -29,7 +29,7 @@ class GameWindow(pyglet.window.Window):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         #self.fps_display = pyglet.window.FPSDisplay(self)
-        self.set_caption("Pyweek35 This is fine")
+        self.set_caption("Pyweek35 The fine dinner")
         #self.keys = pyglet.window.key.KeyStateHandler()
         #self.push_handlers(self.keys)
         self.started = False
@@ -650,7 +650,7 @@ class LevelStart(Level):
                       for b in range(self.h)
                       for a in range(self.w)]
         self.player_head = None
-        self.title = "Fine dinner"
+        self.title = "The fine dinner"
         self.objectives = ['',
                            'Pyweek 35 entry by yarolig',
                            '',
@@ -677,7 +677,8 @@ class Level2(Level):
                            '(optional) Do not eat any apples.',
                            '',
                            'When ready return to your basket.',
-                           '','','',
+                           '','',
+                           'Press R to restart the level.',
                            'Press any key to continue']
         self.init()
 
@@ -726,7 +727,7 @@ class Level2(Level):
 
 
         self.spawn_birds(stats, 3, 100)
-        self.spawn_apples(stats, 1)
+        self.spawn_apples(stats, 1, 30)
 
     def next_level(self):
         return Level3()
