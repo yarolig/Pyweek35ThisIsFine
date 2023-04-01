@@ -142,7 +142,9 @@ class GameWindow(pyglet.window.Window):
 
 
     def on_resize(self, width, height):
+        super().on_resize(width, height)
         gl.glViewport(0, 0, width, height)
+
 
 all_images = {}
 def get_image(name):
