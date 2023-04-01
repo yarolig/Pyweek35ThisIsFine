@@ -1,12 +1,35 @@
-This is Fine
-============
+The fine dinner
+===============
 
-Pyweek 35 entry by yarolig.
+Pyweek 35 individual entry by Alexander Izmailov.
+
+How to play
+-----------
+
+Install the lastest pyglet:
+
+   pip install -r requirements.txt
+or
+   pip install pyglet==2.0.5
+
+Launch:
+   ./run_game.py
+
+Controls
+--------
+
+WSAD - move
+O - review goals
+Esc - exit
+
+Cheatcodes
+----------
+Ctrl+N - win this level
 
 License
 =======
 
-The code is distributed under the terms of MIT License.
+The code and data is distributed under the terms of MIT License.
 The data have different licenses.
 
 Fonts
