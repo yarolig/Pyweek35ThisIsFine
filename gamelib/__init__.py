@@ -12,8 +12,8 @@ class GameWindow(pyglet.window.Window):
         super().__init__(*args, **kwargs)
         self.fps_display = pyglet.window.FPSDisplay(self)
         self.set_caption("Pyweek35 This is fine")
-        self.keys = pyglet.window.key.KeyStateHandler()
-        self.push_handlers(self.keys)
+        #self.keys = pyglet.window.key.KeyStateHandler()
+        #self.push_handlers(self.keys)
         self.started = False
         self.ticks = 0
 
@@ -25,6 +25,23 @@ class GameWindow(pyglet.window.Window):
         #self.label = pyglet.text.Label('Hello, world', x=10, y=10)
         #                                font_name="Constantine",
         #                                font_size=12,x=10, y=10)
+
+    def on_key_press(self, symbol, modifiers):
+        print('on_key_press', pyglet.window.key.symbol_string(symbol), modifiers)
+        print((symbol, 'in', (pyglet.window.key.W, pyglet.window.key.UP)))
+        if symbol in (pyglet.window.key.W, pyglet.window.key.UP):
+            self.main.last_dir = 'W'
+
+        if symbol in (pyglet.window.key.S, pyglet.window.key.DOWN):
+            self.main.last_dir = 'S'
+        if symbol in (pyglet.window.key.A, pyglet.window.key.LEFT):
+            self.main.last_dir = 'A'
+        if symbol in (pyglet.window.key.D, pyglet.window.key.RIGHT):
+            self.main.last_dir = 'D'
+        #print(f'{self.last_dir=}')
+        if symbol in (pyglet.window.key.ESCAPE,):
+            self.close()
+
 
     def on_maybe_start(self):
         if self.started:
@@ -49,6 +66,9 @@ class GameWindow(pyglet.window.Window):
         self.level.cell(1,0).front_entity = Apple()
         self.level.cell(5,2).front_entity = Lamp()
 
+
+        self.level.cell(7, 2).front_entity = Bird()
+
         for a, b, c in self.level.enum_cells():
             c.back_entity = Grass()
 
@@ -57,9 +77,9 @@ class GameWindow(pyglet.window.Window):
         self.on_maybe_start()
         self.ticks += 1
 
-        self.main.micro_tick(self.level, self.keys)
+        self.main.micro_tick(self.level, {})
         if self.ticks % 20 == 0:
-            self.main.macro_tick(self.level, self.keys)
+            self.main.macro_tick(self.level, {})
 
 
         gl.glClearColor(0.0, 0.0, 0.0, 1.0)
@@ -101,6 +121,7 @@ class Entity:
     blocks_light = True
     light_level = 0
     image_template = ''
+    edible = False
 
     # points to moving direction or connected head-side body part
     direction = ''
@@ -112,6 +133,10 @@ class Entity:
 
     def on_tick(self, level):
         pass
+    def on_tick_after_light(self, level):
+        pass
+
+
 class Grass(Entity):
     direction = 'W'
     image_template = 'data/pics/grass.png'
@@ -152,23 +177,60 @@ class SnakeTail(Entity):
 class Apple(Entity):
     direction = 'W'
     image_template = 'data/pics/apple.png'
+    edible = True
+
+
+class Bird(Entity):
+    direction = 'W'
+    image_template = 'data/pics/birdX.png'
+    fly_away = 0
+    edible = True
+
+    def on_tick_after_light(self, level):
+        if self.fly_away > 10:
+            level.cell(self.x, self.y).front_entity = None
+            return
+
+        for a in range(-1, 2):
+            for b in range(-1, 2):
+                c = level.cell(self.x+a, self.y+b)
+                if (c and c.front_entity
+                    and isinstance(c.front_entity, SnakeHead)
+                    and c.light_level>0
+                ):
+                    self.fly_away = max(self.fly_away, 1)
+
+    def get_image_name(self):
+        if self.fly_away > 10:
+            self.fly_away += 1
+            return self.image_template.replace('X', '2')
+
+        if self.fly_away > 5:
+            self.fly_away += 1
+            return self.image_template.replace('X', '2')
+
+        if self.fly_away > 0:
+            self.fly_away += 1
+            return self.image_template.replace('X', '1')
+        return self.image_template.replace('X', '')
 
 class Lamp(Entity):
     direction = 'W'
     image_template = 'data/pics/lamp.png'
     blocks_light = False
+    LD = 100
 
     def light_a_line(self, ps, pd, level):
         x, y = ps
         tx, ty = pd
-        dx = (tx - x) * 0.01
-        dy = (ty - y) * 0.01
+        dx = (tx - x) * (1.0 / self.LD)
+        dy = (ty - y) * (1.0 / self.LD)
         #print(f"{x} {y} {dx} {dy}")
-        for i in range(0, 100):
-            c = level.cell(int(x + dx * i), int(y + dy * i))
+        for i in range(0, self.LD):
+            c = level.cell(int(x + 0.5 + dx * i), int(y + 0.5 + dy * i))
             if c:
                 #print ('lighting', c.x, c.y, i, (x + dx * i), (y + dy * i))
-                c.light_level = max(c.light_level, 100-i*20)
+                c.light_level = int(max(c.light_level, 100 - self.LD * i /5))
                 if c.front_entity and c.front_entity.blocks_light:
                     break
             else:
@@ -176,12 +238,12 @@ class Lamp(Entity):
 
     def on_tick(self, level):
         #print ('lamp at ', self.x, self.y)
-        level.cell(self.x, self.y).light_level = 100
-        for i in range(-100, 101):
-            self.light_a_line((self.x, self.y), (self.x+i, self.y+100), level)
-            self.light_a_line((self.x, self.y), (self.x+i, self.y-100), level)
-            self.light_a_line((self.x, self.y), (self.x+100, self.y+i), level)
-            self.light_a_line((self.x, self.y), (self.x-100, self.y+i), level)
+        level.cell(self.x, self.y).light_level = self.LD
+        for i in range(-self.LD, self.LD+1):
+            self.light_a_line((self.x, self.y), (self.x+i, self.y+self.LD), level)
+            self.light_a_line((self.x, self.y), (self.x+i, self.y-self.LD), level)
+            self.light_a_line((self.x, self.y), (self.x+self.LD, self.y+i), level)
+            self.light_a_line((self.x, self.y), (self.x-self.LD, self.y+i), level)
 
 class Cell:
     x = 0
@@ -299,7 +361,7 @@ class Main:
         c = level.cell(hx, hy)
         dd = self.last_dir # c.front_entity.direction
         cc = c.front_entity.connection
-
+        print(f'{dd=}')
         dx, dy = DIRECTIONS_XY[dd]
         newx, newy = hx + dx, hy + dy
         tgt_cell = level.cell(newx, newy)
@@ -310,7 +372,7 @@ class Main:
             tgt_cell.front_entity.connection = DIRECTIONS_XY_R[(-dx, -dy)]
             tgt_cell.front_entity.direction = dd
 
-        if tgt_cell and isinstance(tgt_cell.front_entity, Apple):
+        if tgt_cell and tgt_cell.front_entity and tgt_cell.front_entity.edible:
             #self.move_bodypart(c, tgt_cell, level)
             fe = c.front_entity
             c.front_entity = SnakeBody()
@@ -327,7 +389,11 @@ class Main:
                 x = random.randint(0, level.w-1)
                 y = random.randint(0, level.h-1)
                 if not level.cell(x, y).front_entity:
-                    level.cell(x, y).front_entity = Apple()
+                    if random.randint(1,10) < 6:
+                        e = Apple()
+                    else:
+                        e = Bird()
+                    level.cell(x, y).front_entity = e
                     level.cell(x, y).front_entity.x = x
                     level.cell(x, y).front_entity.y = y
                     break
@@ -351,14 +417,19 @@ class Main:
                 c.front_entity.y = b
                 c.front_entity.on_tick(level)
 
+
+        for a, b, c in level.enum_cells():
+            if c.front_entity:
+                c.front_entity.on_tick_after_light(level)
+
         for a, b, c in level.enum_cells():
             #            print (b,a,c.front_entity)
             if c.front_entity and isinstance(c.front_entity, SnakeHead):
                 head_cell = c
                 level.player_head = c
-                print('head is at', a, b)
+                #print('head is at', a, b)
                 break
-
+        '''
         if head_cell:
             if keys[pyglet.window.key.W]:
                 self.last_dir = 'W'
@@ -369,13 +440,13 @@ class Main:
                 self.last_dir = 'A'
             if keys[pyglet.window.key.D]:
                 self.last_dir = 'D'
-
+        '''
     def macro_tick(self, level, keys):
         # find snake's head
         # try to move head in its direction
         # pull conected body parts :)
         # update body parts location
-        print('macro tick')
+        #print('macro tick')
         head_cell = None
 
         for a, b, c in level.enum_cells():
@@ -383,9 +454,9 @@ class Main:
              if c.front_entity and isinstance(c.front_entity, SnakeHead):
                  head_cell = c
                  level.player_head = c
-                 print('head is at', a, b)
+                 #print('head is at', a, b)
                  break
-
+        '''
         if head_cell:
              if keys[pyglet.window.key.W]:
                  self.last_dir = 'W'
@@ -396,10 +467,11 @@ class Main:
              if keys[pyglet.window.key.D]:
                  self.last_dir = 'D'
              dd = self.last_dir
+        '''
+        if head_cell:
+            self.move_snake(head_cell.x, head_cell.y, level)
 
-             self.move_snake(head_cell.x, head_cell.y, level)
-
-             '''
+        '''
                 dx, dy = DIRECTIONS_XY[dd]
                 newx, newy = head_cell.x + dx, head_cell.y + dy
                 tgt_cell = level.cell(newx, newy)
@@ -409,20 +481,21 @@ class Main:
                 #else:
                 #    print("can't move to", newx, newy, tgt_cell, tgt_cell.front_entity)
              '''
-        else:
-            print('no head')
+        #else:
+        #    print('no head')
 
 def main():
-    print('qwe')
+    #print('qwe')
     pyglet.options['shadow_window'] = False
     config = gl.Config(double_buffer=True,
-                       vsync=False,
-                       major_version=2,
-                       minor_version=0,
+                       #vsync=False,
+                       #major_version=2,
+                       #minor_version=0,
                        #forward_compatible=True,
-                       opengl_api="gl",
-                       debug=True)
-    print (config)
-    gw = GameWindow(config=config, vsync=False, resizable=True)
-    print(gw.context)
+                       #opengl_api="gl",
+                       #debug=True
+                       )
+    #print (config)
+    gw = GameWindow(config=config, resizable=True)
+    #print(gw.context)
     pyglet.app.run()
